@@ -1,4 +1,4 @@
-﻿# Get AGIC identity from AKS cluster
+# Get AGIC identity from AKS cluster
 
 $rgName = $( terraform output -raw rg_name )
 $AksName = $( terraform output -raw aks_name )
