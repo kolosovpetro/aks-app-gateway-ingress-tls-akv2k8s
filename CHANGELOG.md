@@ -9,19 +9,19 @@ and this project adheres to [Semantic Versioning v2.0.0](https://semver.org/spec
 
 ### Changed
 
-- Update gitignore
-- Commit lock file
-- Move variable from locals
-- Git ignore txt files
-- Git ignore ssh keys
-- Update GitHub actions CI
-- Fix encoding and BOM characters
-- Azure pipelines for terraform
-- Add editorconfig
-- Remove example sas token
-- Remove json variables file
-- Add default values to tf variables
-- Fix encoding script
-- Add public key and password files mocks CI
-- Adopt naming conventions
-- Utilize azure naming module for terraform
+- Configure VNET and subnets
+- Configure Application gateway
+- Deploy SSL certificate to KeyVault
+- Assign Ingress managed identities
+    - Resource group AKS: `Reader`
+    - Resource group Nodes: `Reader`
+    - App Gateway: `Contributor`
+    - Gateway subnet: `Contributor`
+- Configure akv2k8s CRD using HELM
+- Configure Node pool managed identity
+    - Keyvault RBAC: `Key Vault Secrets User`
+    - Keyvault RBAC: `Key Vault Certificate User`
+- Configure test deployment with
+    - Ingress controller
+    - TLS secret
+    - ClusterIP service
