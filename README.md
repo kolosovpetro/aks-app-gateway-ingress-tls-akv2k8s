@@ -1,57 +1,83 @@
-# Terraform template
+# Azure Application Gateway Ingress AKS
 
-Terraform template for modules and submodules.
-Includes pre-commit hooks that lint the terraform code and generate module's
-documentation as part of README file.
-Contains examples of terraform CI/CD pipelines for GitHub Actions and Azure Pipelines.
+This repository provisions an Azure Kubernetes Service (AKS) cluster with Application Gateway Ingress Controller (AGIC),
+integrated Key Vault secret sync (akv2k8s), and Cloudflare DNS automation.
 
-## Azure naming conventions
+- https://agwy-ingress-test.razumovsky.me
 
-- [Define your naming convention](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming)
-- [Azure naming module](https://registry.terraform.io/modules/Azure/naming/azurerm/latest)
+## Overview
 
-## Terraform Init
+The project deploys a production-ready AKS environment with the following:
 
-- Create and configure Azure Storage Account for Terraform state
-- Create `azure.sas.conf` file with the following content:
-    ```bash
-    storage_account_name = "storage_account_name"
-    container_name       = "container_name"
-    key                  = "terraform.tfstate"
-    sas_token            = "sas_token"
-    ```
-- `terraform init -backend-config="azure.sas.conf" -reconfigure -upgrade`
+- Azure Virtual Network and subnets
+- Application Gateway with a custom domain SSL certificate
+- Key Vault for secure certificate storage
+- AGIC configured with proper identity and RBAC
+- akv2k8s for syncing secrets and certificates from Key Vault
+- Sample application with Ingress, TLS, and service definition
+- Cloudflare integration using PowerShell to update DNS records automatically
 
-## Module referencing
+## Deployment order
 
-- Bitbucket SSH: `git::git@bitbucket.org:kolosovpetro/terraform.git//modules/storage`
-- Github SSH: `git::git@github.com:kolosovpetro/terraform.git//modules/storage`
-- Github HTTP: `github.com/kolosovpetro/AzureLinuxVMTerraform.git//modules/ubuntu-vm-key-auth-no-pip?ref=master`
+- terraform plan
+- terraform apply
+- Update DNS record
+- .\Configure-Kv-CRD.ps1
+- .\Configure-Kv-Nodepool-RBAC.ps1
+- .\Configure-Deployment.ps1
 
-## Pre-commit configuration
+## Configuration
 
-- Install python3 via Windows Store
-- `pip install --upgrade pip`
-- `pip install pre-commit`
-- Update PATH variable
-- `pre-commit install`
+- Configure Virtual Network and dedicated subnets:
+    - Application Gateway Subnet
+    - AKS Subnet
 
-### Install terraform docs
+- Deploy and configure Application Gateway
 
-- `choco install terraform-docs`
+- Upload and manage SSL certificate in Azure Key Vault
 
-### Install tflint
+- Assign managed identity permissions (RBAC):
 
-- `choco install tflint`
+  ### Ingress Managed Identity:
+    - Reader on AKS Resource Group
+    - Reader on Node Resource Group
+    - Contributor on Application Gateway
+    - Contributor on Gateway Subnet
 
-### Documentation
+  ### Node Pool Managed Identity:
+    - Key Vault Secrets User on Key Vault
+    - Key Vault Certificates Officer on Key Vault
 
-- https://github.com/antonbabenko/pre-commit-terraform
-- https://github.com/kolosovpetro/AzureTerraformBackend
-- https://github.com/terraform-docs/terraform-docs
-- https://terraform-docs.io/user-guide/installation/
-- https://pre-commit.com/
+- Configure `akv2k8s` via Helm with CRDs for syncing Key Vault secrets
 
-## Deploy storage account for terraform state
+- Deploy a test application with:
+    - Ingress resource with TLS
+    - ClusterIP Service
+    - Synced certificate from Key Vault via akv2k8s
 
-- See [CreateAzureStorageAccount.ps1](./CreateAzureStorageAccount.ps1)
+- PowerShell scripts for automating DNS updates on Cloudflare
+
+## Requirements
+
+- Terraform CLI
+- Azure CLI
+- PowerShell Core
+- Helm v3
+- kubectl
+- Cloudflare API Token with DNS edit rights
+- Azure subscription with:
+    - Key Vault
+    - Application Gateway
+    - Sufficient IAM permissions to assign roles
+
+## Notes
+
+- Role assignments may require a propagation delay (~5 minutes)
+- Ensure AKS has Managed Identity enabled (User Assigned recommended)
+- AGIC must be configured with the correct Application Gateway name and resource group
+- Key Vault must have `public network access` enabled or appropriate private link settings
+
+## Docs
+
+- https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/kubernetes_cluster
+- https://medium.com/@rhodrifreer/a-terraform-aks-and-application-gateway-tutorial-part-1-91958633519e
