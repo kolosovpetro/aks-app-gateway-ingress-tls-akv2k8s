@@ -25,3 +25,4 @@ and this project adheres to [Semantic Versioning v2.0.0](https://semver.org/spec
     - Ingress controller
     - TLS secret
     - ClusterIP service
+- Add Cloudflare DNS automation in PowerShell
