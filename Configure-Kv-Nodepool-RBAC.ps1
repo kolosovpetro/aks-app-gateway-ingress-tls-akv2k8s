@@ -1,4 +1,4 @@
-﻿$rgNodepool = terraform output -raw rg_node_pool
+$rgNodepool = terraform output -raw rg_node_pool
 $kvName = terraform output -raw kv_name
 
 Write-Warning "Rg nodepool: $rgNodepool"
