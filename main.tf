@@ -57,12 +57,6 @@ resource "azurerm_subnet" "aks" {
 # AKS
 #################################################################################################################
 
-resource "azurerm_user_assigned_identity" "aks" {
-  name                = "agic-identity"
-  resource_group_name = azurerm_resource_group.public.name
-  location            = azurerm_resource_group.public.location
-}
-
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "aks-${var.prefix}"
   location            = azurerm_resource_group.public.location
@@ -84,8 +78,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.aks.id]
+    type = "SystemAssigned"
   }
 
   ingress_application_gateway {
@@ -246,12 +239,6 @@ resource "azurerm_role_assignment" "kv_azure_portal_rbac" {
   scope                = azurerm_key_vault.public.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = "89ab0b10-1214-4c8f-878c-18c3544bb547"
-}
-
-resource "azurerm_role_assignment" "kv_aks_reader" {
-  scope                = azurerm_key_vault.public.id
-  role_definition_name = "Key Vault Certificate User"
-  principal_id         = azurerm_user_assigned_identity.aks.principal_id
 }
 
 ##########################################################################

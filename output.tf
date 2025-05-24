@@ -21,3 +21,7 @@ output "agwy_name" {
 output "kv_name" {
   value = azurerm_key_vault.public.name
 }
+
+output "rg_node_pool" {
+  value = azurerm_kubernetes_cluster.aks.node_resource_group
+}
