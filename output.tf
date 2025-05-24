@@ -17,3 +17,7 @@ output "connect_command" {
 output "agwy_name" {
   value = azurerm_application_gateway.main.name
 }
+
+output "kv_name" {
+  value = azurerm_key_vault.public.name
+}

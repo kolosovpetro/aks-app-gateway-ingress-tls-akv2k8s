@@ -208,7 +208,10 @@ resource "azurerm_application_gateway" "main" {
       backend_http_settings,
       http_listener,
       probe,
-      request_routing_rule
+      request_routing_rule,
+      frontend_port,
+      redirect_configuration,
+      ssl_certificate
     ]
   }
 }
