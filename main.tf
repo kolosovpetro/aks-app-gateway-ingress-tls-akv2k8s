@@ -13,7 +13,6 @@ locals {
   agw_frontend_port           = "port-http-${var.prefix}"
   agw_frontend_ip_config_name = "feipc-agwy-${var.prefix}"
   agw_listener_name           = "agwy-listener-${var.prefix}"
-  agw_listener_port           = "http-fe-port-${var.prefix}"
   agw_backend_pool            = "aks-backend-${var.prefix}"
   agw_backend_settings        = "http-settings-${var.prefix}"
 
@@ -58,6 +57,12 @@ resource "azurerm_subnet" "aks" {
 # AKS
 #################################################################################################################
 
+resource "azurerm_user_assigned_identity" "aks" {
+  name                = "agic-identity"
+  resource_group_name = azurerm_resource_group.public.name
+  location            = azurerm_resource_group.public.location
+}
+
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "aks-${var.prefix}"
   location            = azurerm_resource_group.public.location
@@ -69,6 +74,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     node_count     = 2
     vm_size        = "Standard_DS2_v2"
     vnet_subnet_id = azurerm_subnet.aks.id
+    type           = "VirtualMachineScaleSets"
 
     upgrade_settings {
       drain_timeout_in_minutes      = 0
@@ -79,7 +85,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.agwy_identity.id]
+    identity_ids = [azurerm_user_assigned_identity.aks.id]
   }
 
   ingress_application_gateway {
@@ -95,38 +101,36 @@ resource "azurerm_kubernetes_cluster" "aks" {
 }
 
 #################################################################################################################
-# APP GATEWAY
+# RBAC
 #################################################################################################################
 
-resource "azurerm_user_assigned_identity" "agwy_identity" {
-  name                = "agic-identity"
-  resource_group_name = azurerm_resource_group.public.name
-  location            = azurerm_resource_group.public.location
-}
-
-resource "azurerm_role_assignment" "agwy_role" {
-  scope                = azurerm_application_gateway.main.id
-  role_definition_name = "Contributor"
+resource "azurerm_role_assignment" "rg_aks_ingress_reader" {
+  scope                = azurerm_resource_group.public.id
+  role_definition_name = "Reader"
   principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
 }
 
-resource "azurerm_role_assignment" "agwy_role_nodes" {
+resource "azurerm_role_assignment" "rg_nodes_ingress_reader" {
   scope                = azurerm_kubernetes_cluster.aks.node_resource_group_id
   role_definition_name = "Reader"
   principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
 }
 
-resource "azurerm_role_assignment" "agwy_role_vnet" {
+resource "azurerm_role_assignment" "agwy_ingress_contributor" {
+  scope                = azurerm_application_gateway.main.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+}
+
+resource "azurerm_role_assignment" "snet_agwy_ingress_contributor" {
   scope                = azurerm_subnet.agwy.id
   role_definition_name = "Contributor"
   principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
 }
 
-resource "azurerm_role_assignment" "agic_reader_rg" {
-  scope                = azurerm_resource_group.public.id
-  role_definition_name = "Reader"
-  principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
-}
+#################################################################################################################
+# APP GATEWAY
+#################################################################################################################
 
 resource "azurerm_public_ip" "agwy" {
   name                = "pip-agwy-${var.prefix}"
@@ -196,4 +200,72 @@ resource "azurerm_application_gateway" "main" {
     cookie_based_affinity = "Disabled"
     request_timeout       = 20
   }
+
+  lifecycle {
+    ignore_changes = [
+      tags,
+      backend_address_pool,
+      backend_http_settings,
+      http_listener,
+      probe,
+      request_routing_rule
+    ]
+  }
+}
+
+##########################################################################
+# KEYVAULT
+##########################################################################
+
+resource "azurerm_key_vault" "public" {
+  name                        = "kv-aks-${var.prefix}"
+  location                    = azurerm_resource_group.public.location
+  resource_group_name         = azurerm_resource_group.public.name
+  enabled_for_disk_encryption = true
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  soft_delete_retention_days  = 7
+  purge_protection_enabled    = false
+  enable_rbac_authorization   = true
+  sku_name                    = "standard"
+}
+
+##########################################################################
+# RBAC KEYVAULT
+##########################################################################
+
+resource "azurerm_role_assignment" "kv_cli_rbac" {
+  scope                = azurerm_key_vault.public.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_role_assignment" "kv_azure_portal_rbac" {
+  scope                = azurerm_key_vault.public.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = "89ab0b10-1214-4c8f-878c-18c3544bb547"
+}
+
+resource "azurerm_role_assignment" "kv_aks_reader" {
+  scope                = azurerm_key_vault.public.id
+  role_definition_name = "Key Vault Certificate User"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+}
+
+##########################################################################
+# SECRETS
+##########################################################################
+
+resource "azurerm_key_vault_certificate" "imported" {
+  name         = "razumovsky-certificate"
+  key_vault_id = azurerm_key_vault.public.id
+
+  certificate {
+    contents = filebase64("${path.root}/wildcard_22_Aug_2025_razumovsky.me.pfx")
+    password = file("${path.root}/password.txt")
+  }
+
+  depends_on = [
+    azurerm_role_assignment.kv_cli_rbac,
+    azurerm_role_assignment.kv_azure_portal_rbac
+  ]
 }
