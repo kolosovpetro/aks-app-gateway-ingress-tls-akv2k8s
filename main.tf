@@ -93,8 +93,17 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
+data "azurerm_kubernetes_cluster" "aks" {
+  name                = azurerm_kubernetes_cluster.aks.name
+  resource_group_name = azurerm_resource_group.public.name
+
+  depends_on = [
+    azurerm_kubernetes_cluster.aks
+  ]
+}
+
 #################################################################################################################
-# RBAC
+# RBAC GATEWAY
 #################################################################################################################
 
 resource "azurerm_role_assignment" "rg_aks_ingress_reader" {
@@ -239,6 +248,32 @@ resource "azurerm_role_assignment" "kv_azure_portal_rbac" {
   scope                = azurerm_key_vault.public.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = "89ab0b10-1214-4c8f-878c-18c3544bb547"
+}
+
+##########################################################################
+# RBAC KEYVAULT FOR AKS
+##########################################################################
+
+resource "azurerm_role_assignment" "aks_kubelet_rbac_certificates" {
+  scope                = azurerm_key_vault.public.id
+  role_definition_name = "Key Vault Certificate User"
+  principal_id         = data.azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+
+  depends_on = [
+    azurerm_role_assignment.kv_cli_rbac,
+    azurerm_kubernetes_cluster.aks
+  ]
+}
+
+resource "azurerm_role_assignment" "aks_kubelet_rbac_secrets" {
+  scope                = azurerm_key_vault.public.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = data.azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+
+  depends_on = [
+    azurerm_role_assignment.kv_cli_rbac,
+    azurerm_kubernetes_cluster.aks
+  ]
 }
 
 ##########################################################################

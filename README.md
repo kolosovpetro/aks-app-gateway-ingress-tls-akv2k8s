@@ -21,9 +21,8 @@ The project deploys a production-ready AKS environment with the following:
 
 - terraform plan
 - terraform apply
-- Update DNS record
+- .\Configure-Cloudflare-Records.ps1
 - .\Configure-Kv-CRD.ps1
-- .\Configure-Kv-Nodepool-RBAC.ps1
 - .\Configure-Deployment.ps1
 
 ## Configuration
